@@ -1,0 +1,78 @@
+---
+- name: Perform HDFS operations as hadoop user
+  hosts: localhost
+  connection: local
+  vars:
+    hdfs_path: "/user/hadoop"  # Base HDFS path for operations
+
+  tasks:
+    - name: Create a directory in HDFS
+      shell: |
+        sudo -u hadoop /usr/local/hadoop/bin/hdfs dfs -mkdir -p {{ hdfs_path }}/test_dir
+      register: mkdir_output
+      changed_when: mkdir_output.rc == 0
+
+    - name: Print directory creation output
+      debug:
+        var: mkdir_output.stdout
+
+    - name: Upload a local file to HDFS
+      shell: |
+        echo "This is a test file." > /tmp/test_file.txt
+        sudo -u hadoop /usr/local/hadoop/bin/hdfs dfs -put /tmp/test_file.txt {{ hdfs_path }}/test_dir/
+      register: upload_output
+      changed_when: upload_output.rc == 0
+
+    - name: Print file upload output
+      debug:
+        var: upload_output.stdout
+
+    - name: List files in HDFS directory
+      shell: |
+        sudo -u hadoop /usr/local/hadoop/bin/hdfs dfs -ls {{ hdfs_path }}/test_dir
+      register: list_output
+      changed_when: list_output.rc == 0
+
+    - name: Print directory listing output
+      debug:
+        var: list_output.stdout
+
+    - name: Modify a file in HDFS (append content)
+      shell: |
+        echo "Appended content." | sudo -u hadoop /usr/local/hadoop/bin/hdfs dfs -appendToFile - {{ hdfs_path }}/test_dir/test_file.txt
+      register: modify_output
+      changed_when: modify_output.rc == 0
+
+    - name: Print file modification output
+      debug:
+        var: modify_output.stdout
+
+    - name: Read the modified file from HDFS
+      shell: |
+        sudo -u hadoop /usr/local/hadoop/bin/hdfs dfs -cat {{ hdfs_path }}/test_dir/test_file.txt
+      register: read_output
+      changed_when: read_output.rc == 0
+
+    - name: Print file content
+      debug:
+        var: read_output.stdout
+
+    - name: Delete a file from HDFS
+      shell: |
+        sudo -u hadoop /usr/local/hadoop/bin/hdfs dfs -rm {{ hdfs_path }}/test_dir/test_file.txt
+      register: delete_output
+      changed_when: delete_output.rc == 0
+
+    - name: Print file deletion output
+      debug:
+        var: delete_output.stdout
+
+    - name: Delete the directory from HDFS
+      shell: |
+        sudo -u hadoop /usr/local/hadoop/bin/hdfs dfs -rm -r {{ hdfs_path }}/test_dir
+      register: delete_dir_output
+      changed_when: delete_dir_output.rc == 0
+
+    - name: Print directory deletion output
+      debug:
+        var: delete_dir_output.stdout

@@ -1,0 +1,95 @@
+- name: Setup Hadoop on Chromebook Linux
+  hosts: localhost
+  connection: local
+  become: yes
+  tasks:
+
+    - name: Install Java 11
+      apt:
+        name: openjdk-11-jdk
+        state: present
+
+    - name: Download Hadoop
+      get_url:
+        url: "https://downloads.apache.org/hadoop/common/hadoop-3.3.6/hadoop-3.3.6.tar.gz"
+        dest: "/tmp/hadoop-3.3.6.tar.gz"
+
+    - name: Extract Hadoop
+      unarchive:
+        src: "/tmp/hadoop-3.3.6.tar.gz"
+        dest: "/usr/local/"
+        remote_src: yes
+
+    - name: Rename Hadoop Directory
+      command: mv /usr/local/hadoop-3.3.6 /usr/local/hadoop
+      args:
+        creates: /usr/local/hadoop
+
+    - name: Create Hadoop User
+      user:
+        name: hadoop
+        shell: /bin/bash
+        createhome: yes
+
+    - name: Allow Hadoop user passwordless sudo access
+      copy:
+        dest: /etc/sudoers.d/hadoop
+        content: "hadoop ALL=(ALL) NOPASSWD: ALL"
+        mode: '0440'
+
+    - name: Set Hadoop Ownership to hadoop User
+      file:
+        path: /usr/local/hadoop
+        owner: hadoop
+        group: hadoop
+        recurse: yes
+
+    - name: Set Hadoop Environment Variables for Hadoop User
+      blockinfile:
+        path: /home/hadoop/.bashrc
+        block: |
+          export JAVA_HOME=/usr/lib/jvm/java-11-openjdk-amd64
+          export HADOOP_HOME=/usr/local/hadoop
+          export PATH=$PATH:$HADOOP_HOME/bin:$HADOOP_HOME/sbin
+          export HDFS_NAMENODE_USER="hadoop"
+          export HDFS_DATANODE_USER="hadoop"
+          export HDFS_SECONDARYNAMENODE_USER="hadoop"
+          export YARN_RESOURCEMANAGER_USER="hadoop"
+          export YARN_NODEMANAGER_USER="hadoop"
+
+    - name: Ensure JAVA_HOME is set in hadoop-env.sh
+      lineinfile:
+        path: /usr/local/hadoop/etc/hadoop/hadoop-env.sh
+        regexp: '^export JAVA_HOME='
+        line: 'export JAVA_HOME=/usr/lib/jvm/java-11-openjdk-amd64'
+
+    - name: Configure Hadoop (core-site.xml)
+      copy:
+        dest: /usr/local/hadoop/etc/hadoop/core-site.xml
+        content: |
+          <configuration>
+              <property>
+                  <name>fs.defaultFS</name>
+                  <value>hdfs://localhost:9000</value>
+              </property>
+          </configuration>
+
+    - name: Configure Hadoop (hdfs-site.xml)
+      copy:
+        dest: /usr/local/hadoop/etc/hadoop/hdfs-site.xml
+        content: |
+          <configuration>
+              <property>
+                  <name>dfs.replication</name>
+                  <value>1</value>
+              </property>
+          </configuration>
+
+    - name: Format HDFS
+      shell: |
+        echo Y | sudo -u hadoop JAVA_HOME=/usr/lib/jvm/java-11-openjdk-amd64 /usr/local/hadoop/bin/hdfs namenode -format
+
+    - name: Start Hadoop Services as hadoop User
+      shell: |
+        sudo -u hadoop bash -lc "/usr/local/hadoop/sbin/start-dfs.sh && /usr/local/hadoop/sbin/start-yarn.sh"
+
